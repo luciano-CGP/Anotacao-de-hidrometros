@@ -1,7 +1,7 @@
-const { Client } = require('pg');
-
 exports.handler = async (event, context) => {
-  // Libera chamadas do tipo CORS (permitir envio pelo HTML)
+  // Importa a biblioteca diretamente no momento da execução
+  const { Client } = await import('https://esm.sh/pg@8.11.3');
+
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -12,7 +12,6 @@ exports.handler = async (event, context) => {
     return { statusCode: 200, headers, body: '' };
   }
 
-  // Verifica se o método de envio é POST
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -21,7 +20,6 @@ exports.handler = async (event, context) => {
     };
   }
 
-  // Conecta ao banco de dados usando a URL cadastrada no Netlify
   const client = new Client({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
@@ -32,7 +30,6 @@ exports.handler = async (event, context) => {
 
     await client.connect();
 
-    // 1. Garante que a tabela de anotações existe
     await client.query(`
       CREATE TABLE IF NOT EXISTS anotacoes (
         id SERIAL PRIMARY KEY,
@@ -42,7 +39,6 @@ exports.handler = async (event, context) => {
       );
     `);
 
-    // 2. Insere os dados recebidos do formulário
     const queryText = 'INSERT INTO anotacoes(hidrometro, leitura) VALUES($1, $2) RETURNING *';
     const values = [dados.hidrometro, dados.leitura];
     const res = await client.query(queryText, values);
