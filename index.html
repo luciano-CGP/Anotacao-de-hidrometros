@@ -1,0 +1,1519 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Seriais - Hidrômetros</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Bibliotecas de Exportação -->
+    <!-- jsPDF e autoTable para PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <!-- SheetJS para Excel (.xlsx) -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        .view-section {
+            display: none;
+            animation: fadeIn 0.25s ease-in-out;
+        }
+        .view-section.active {
+            display: block;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .modal-overlay {
+            display: none;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .box-grid-btn {
+            transition: all 0.2s;
+        }
+        .box-grid-btn:hover {
+            transform: scale(1.05);
+        }
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-100 text-slate-800 dark:bg-slate-900 dark:text-slate-100 pb-10">
+
+    <header class="bg-blue-700 dark:bg-slate-800 text-white shadow-md sticky top-0 z-40 transition-colors">
+        <div class="max-w-6xl mx-auto p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <h1 class="text-xl font-black flex items-center gap-2 cursor-pointer w-full sm:w-auto justify-center sm:justify-start" onclick="navigate('session')">
+                <i class="fa-solid fa-water text-blue-300"></i> 
+                <span>Hidrômetros</span>
+            </h1>
+            <nav class="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm font-bold w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 justify-center">
+                <button onclick="actionVoltar()" id="nav-btn-session" class="nav-btn bg-blue-800 dark:bg-slate-700 hover:bg-blue-600 dark:hover:bg-slate-600 px-3 py-2 rounded-lg transition flex items-center gap-1 whitespace-nowrap" title="Voltar">
+                    <i class="fa-solid fa-arrow-left"></i> VOLTAR
+                </button>
+                <button onclick="navigate('dashboard')" id="nav-btn-dashboard" class="nav-btn hover:bg-blue-600 dark:hover:bg-slate-700 px-3 py-2 rounded-lg transition flex items-center gap-1 whitespace-nowrap">
+                    <i class="fa-solid fa-chart-pie"></i> DASHBOARD
+                </button>
+                <button onclick="navigate('history')" id="nav-btn-history" class="nav-btn hover:bg-blue-600 dark:hover:bg-slate-700 px-3 py-2 rounded-lg transition flex items-center gap-1 whitespace-nowrap">
+                    <i class="fa-solid fa-clock-rotate-left"></i> HISTÓRICO
+                </button>
+                <button onclick="navigate('backup')" id="nav-btn-backup" class="nav-btn hover:bg-blue-600 dark:hover:bg-slate-700 px-3 py-2 rounded-lg transition flex items-center gap-1 whitespace-nowrap">
+                    <i class="fa-solid fa-database"></i> DADOS
+                </button>
+                
+                <button id="theme-toggle-btn" onclick="toggleTheme()" class="ml-auto sm:ml-2 bg-blue-900/50 dark:bg-slate-700 hover:bg-blue-900 dark:hover:bg-slate-600 p-2.5 rounded-lg transition text-yellow-300 dark:text-yellow-400 shrink-0" title="Alternar Tema">
+                    <i id="theme-icon" class="fa-solid fa-moon text-lg"></i>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="flex-grow p-4 max-w-6xl mx-auto w-full">
+        
+        <!-- SEÇÃO: SESSÃO ATUAL / GERAR CAIXAS -->
+        <section id="view-session" class="view-section active">
+            
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 sm:p-6 mb-6 transition-colors">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 border-b border-slate-200 dark:border-slate-700 pb-4 gap-4">
+                    <div>
+                        <h2 class="text-xl sm:text-2xl font-black text-slate-800 dark:text-white">Gerar Caixas</h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">Configure o palete e o prefixo geral.</p>
+                    </div>
+                    <button onclick="resetPalletConfigConfirm()" class="w-full sm:w-auto text-sm bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-lg transition font-bold whitespace-nowrap">
+                        <i class="fa-solid fa-rotate-left mr-1"></i> Novo Palete
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
+                    <div class="lg:col-span-2">
+                        <label class="block text-xs font-bold mb-1 text-slate-600 dark:text-slate-300">Funcionário</label>
+                        <input type="text" id="empName" placeholder="Nome" class="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" onblur="applyPalletHeader()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold mb-1 text-slate-600 dark:text-slate-300">Marca</label>
+                        <input type="text" id="brand" placeholder="Ex: Saga" oninput="autoFillSigla()" onblur="applyPalletHeader()" class="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold mb-1 text-slate-600 dark:text-slate-300">Sigla</label>
+                        <input type="text" id="sigla" placeholder="SG" maxlength="4" class="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none uppercase" onblur="applyPalletHeader()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold mb-1 text-slate-600 dark:text-slate-300">Lote</label>
+                        <input type="number" id="lot" placeholder="Ex: 5" min="1" class="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" onblur="applyPalletHeader()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold mb-1 text-slate-600 dark:text-slate-300">Palete Nº</label>
+                        <input type="number" id="palletNum" placeholder="Ex: 10" min="1" class="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" onblur="applyPalletHeader()">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold mb-1 text-slate-600 dark:text-slate-300" title="Número da primeira caixa do palete">Caixa Inicial</label>
+                        <input type="number" id="initialBox" placeholder="Ex: 1, 51" min="1" class="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none" onblur="applyPalletHeader()">
+                    </div>
+                </div>
+                <div class="mt-3 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-900/50">
+                    <label class="block text-xs font-bold mb-1 text-blue-800 dark:text-blue-300 uppercase">Prefixo Comum (Fixo para as caixas)</label>
+                    <input type="text" id="prefix" placeholder="Ex: A26SG011" class="w-full p-2 border border-blue-300 dark:border-blue-700 rounded-lg bg-white dark:bg-slate-900 text-blue-900 dark:text-white font-mono font-bold uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none" onblur="applyPalletHeader()">
+                    <p class="text-xs text-blue-600 dark:text-blue-400 mt-1 font-medium">O prefixo não é alterado pelo sistema, ele será apenas concatenado aos números digitados abaixo.</p>
+                </div>
+            </div>
+
+            <!-- CARD GERADOR -->
+            <div id="box-generator-card" class="bg-white dark:bg-slate-800 rounded-xl shadow-lg border-2 border-blue-500 dark:border-blue-600 p-6 mb-6 transition-colors">
+                
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b border-slate-200 dark:border-slate-700">
+                    <div>
+                        <div class="flex items-center gap-3 mb-2">
+                            <span id="box-label-badge" class="bg-blue-600 text-white font-black px-4 py-1.5 rounded-lg text-sm shadow-md flex items-center gap-2">
+                                <i class="fa-solid fa-box"></i> CAIXA 01
+                            </span>
+                            <span class="text-xs font-bold text-slate-500 dark:text-slate-400" id="box-progress-info">0 de 50 caixas</span>
+                        </div>
+                        <h3 class="text-lg font-black text-slate-800 dark:text-white">Registrar Seriais da Caixa</h3>
+                    </div>
+                    <div class="text-left md:text-right w-full md:w-auto bg-slate-100 dark:bg-slate-900 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <span class="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">Palete Atual</span>
+                        <span id="display-pallet-code" class="text-lg font-black text-blue-700 dark:text-blue-400">PLT - SG/</span>
+                    </div>
+                </div>
+
+                <!-- SELETOR DE MODO -->
+                <div class="mb-6 flex gap-4">
+                    <label class="flex-1 cursor-pointer">
+                        <input type="radio" name="genMode" value="sequential" class="peer hidden" checked onchange="toggleGenerationMode()">
+                        <div class="p-3 text-center border-2 border-slate-200 dark:border-slate-700 rounded-xl peer-checked:border-blue-500 peer-checked:bg-blue-50 dark:peer-checked:bg-blue-900/30 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 font-bold transition-all">
+                            <i class="fa-solid fa-list-ol mb-1 text-xl block"></i> Sequencial
+                        </div>
+                    </label>
+                    <label class="flex-1 cursor-pointer">
+                        <input type="radio" name="genMode" value="manual" class="peer hidden" onchange="toggleGenerationMode()">
+                        <div class="p-3 text-center border-2 border-slate-200 dark:border-slate-700 rounded-xl peer-checked:border-emerald-500 peer-checked:bg-emerald-50 dark:peer-checked:bg-emerald-900/30 peer-checked:text-emerald-700 dark:peer-checked:text-emerald-300 font-bold transition-all">
+                            <i class="fa-solid fa-keyboard mb-1 text-xl block"></i> Manual
+                        </div>
+                    </label>
+                </div>
+
+                <!-- MODO SEQUENCIAL -->
+                <div id="mode-sequential-container">
+                    <p class="text-sm text-slate-600 dark:text-slate-400 mb-4 font-medium">Digite apenas o <strong class="text-slate-800 dark:text-slate-200">primeiro número</strong>. O sistema gerará os próximos 9 automaticamente, completando a caixa (10 hidrômetros).</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                        <div class="md:col-span-3">
+                            <label class="block text-sm font-black text-slate-800 dark:text-slate-100 mb-2 uppercase">Primeiro Número da Caixa</label>
+                            <input type="text" id="seqInput" placeholder="Ex: 1011" class="w-full p-4 border-2 border-slate-300 dark:border-slate-600 rounded-xl bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white text-xl font-mono font-black focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 focus:outline-none transition-all shadow-inner uppercase">
+                        </div>
+                        <div>
+                            <button onclick="generateSequentialBox()" id="btn-generate-seq" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black py-4 px-6 rounded-xl text-lg shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2">
+                                <i class="fa-solid fa-bolt"></i> GERAR 10
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MODO MANUAL -->
+                <div id="mode-manual-container" class="hidden">
+                    <p class="text-sm text-slate-600 dark:text-slate-400 mb-4 font-medium">Digite os <strong class="text-slate-800 dark:text-slate-200">10 números</strong> individualmente. O sistema apenas adicionará o Prefixo Comum. Não haverá cálculos ou sequências automáticas.</p>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4" id="manual-inputs-grid">
+                        <!-- Gerado via JS -->
+                    </div>
+                    
+                    <button onclick="generateManualBox()" id="btn-generate-man" class="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black py-4 px-6 rounded-xl text-lg shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-check-double"></i> SALVAR CAIXA MANUAL
+                    </button>
+                </div>
+
+                <div id="toast-message" class="mt-4 hidden p-4 rounded-xl text-sm font-bold flex items-center justify-between shadow-md"></div>
+            </div>
+
+        </section>
+
+        <!-- SEÇÃO: DASHBOARD -->
+        <section id="view-dashboard" class="view-section">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <h2 class="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-blue-600"></i> Dashboard
+                </h2>
+                <div class="flex gap-2 w-full sm:w-auto">
+                    <button onclick="savePalletSession()" class="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg shadow transition text-sm flex items-center justify-center gap-2 uppercase">
+                        <i class="fa-solid fa-check-double"></i> Concluir Palete
+                    </button>
+                </div>
+            </div>
+
+            <!-- CARDS DE ESTATÍSTICAS -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                    <span class="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase">Palete em Uso</span>
+                    <span id="dash-pallet" class="text-lg sm:text-xl font-black text-blue-700 dark:text-blue-400 truncate">PLT-SG/</span>
+                </div>
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                    <span class="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase">Caixas (Meta 50)</span>
+                    <span id="dash-boxes" class="text-lg sm:text-xl font-black text-slate-800 dark:text-white">0 / 50</span>
+                </div>
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                    <span class="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase">Hidrômetros</span>
+                    <span id="dash-meters" class="text-lg sm:text-xl font-black text-slate-800 dark:text-white">0 / 500</span>
+                </div>
+                <div class="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                    <span class="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1 uppercase">Último Serial</span>
+                    <span id="dash-last-serial" class="text-sm sm:text-base font-mono font-bold text-emerald-600 dark:text-emerald-400 truncate">-</span>
+                </div>
+            </div>
+
+            <!-- BARRA DE PROGRESSO -->
+            <div class="bg-white dark:bg-slate-800 p-5 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 mb-8">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-bold text-slate-700 dark:text-slate-300">Progresso do Palete</span>
+                    <span id="dash-progress-text" class="text-sm font-black text-blue-600 dark:text-blue-400">0% Concluído</span>
+                </div>
+                <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-4 overflow-hidden">
+                    <div id="dash-progress-bar" class="bg-blue-600 h-4 rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- AÇÕES DE EXPORTAÇÃO LIMPA -->
+            <div class="bg-blue-50 dark:bg-slate-800/80 p-5 rounded-xl border border-blue-200 dark:border-slate-700 mb-8">
+                <h3 class="text-sm font-black text-blue-900 dark:text-blue-300 mb-3 uppercase">Exportar Relação de Seriais</h3>
+                <div class="flex flex-wrap gap-3">
+                    <button onclick="copyCleanSerials()" class="flex-1 sm:flex-none bg-slate-700 hover:bg-slate-800 text-white font-bold py-3 px-5 rounded-lg shadow-sm transition flex items-center justify-center gap-2">
+                        <i class="fa-regular fa-copy text-lg"></i> Copiar Seriais
+                    </button>
+                    <button onclick="exportExcelCurrent()" class="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-5 rounded-lg shadow-sm transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-file-excel text-lg"></i> Exportar Excel
+                    </button>
+                    <button onclick="generateCleanPDFCurrent()" class="flex-1 sm:flex-none bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-5 rounded-lg shadow-sm transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-file-pdf text-lg"></i> PDF
+                    </button>
+                    <button onclick="shareWhatsAppClean()" class="flex-1 sm:flex-none bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-5 rounded-lg shadow-sm transition flex items-center justify-center gap-2">
+                        <i class="fa-brands fa-whatsapp text-lg"></i> WhatsApp
+                    </button>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-3 font-medium">
+                    * Todos os formatos acima exportam APENAS a coluna de seriais. Os dados administrativos são anexados ao final do documento.
+                </p>
+            </div>
+
+            <!-- GRID VISUAL DAS CAIXAS -->
+            <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+                <h3 class="text-lg font-black text-slate-800 dark:text-white mb-4 border-b border-slate-200 dark:border-slate-700 pb-2">Layout do Palete (50 Caixas)</h3>
+                <div id="dash-boxes-grid" class="grid grid-cols-5 sm:grid-cols-10 gap-2 sm:gap-3">
+                    <!-- Preenchido via JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- SEÇÃO: HISTÓRICO -->
+        <section id="view-history" class="view-section">
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-5 sm:p-6 transition-colors">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b border-slate-200 dark:border-slate-700 pb-4 gap-4">
+                    <h2 class="text-2xl font-black text-slate-800 dark:text-white">Histórico de Paletes</h2>
+                    <button onclick="clearAllDataConfirm()" class="w-full sm:w-auto text-sm bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-800/60 text-red-700 dark:text-red-400 px-4 py-2 rounded-lg transition font-bold flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-trash-can"></i> Limpar Histórico
+                    </button>
+                </div>
+                
+                <div class="mb-6 p-4 bg-blue-50 dark:bg-slate-900/60 rounded-xl border border-blue-100 dark:border-slate-700">
+                    <h3 class="font-bold text-blue-900 dark:text-blue-300 mb-2 text-sm">Consultar Serial ou Palete</h3>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <input type="text" id="searchInput" placeholder="Digite o serial (ex: A26SG0111050) ou Palete" class="flex-grow p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-base font-mono uppercase focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <button onclick="searchHistory()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition shadow flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-magnifying-glass"></i> Buscar
+                        </button>
+                    </div>
+                    <div id="searchResult" class="mt-4 hidden p-4 rounded-lg transition-all"></div>
+                </div>
+
+                <div class="table-container border border-slate-200 dark:border-slate-700 rounded-lg">
+                    <table class="w-full text-sm text-left text-slate-600 dark:text-slate-300">
+                        <thead class="text-xs uppercase bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-black">
+                            <tr>
+                                <th class="px-4 py-3">Data/Hora</th>
+                                <th class="px-4 py-3">Palete</th>
+                                <th class="px-4 py-3">Caixas/Qtd</th>
+                                <th class="px-4 py-3">Operador</th>
+                                <th class="px-4 py-3 text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-tbody">
+                            <!-- Preenchido via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- SEÇÃO: BACKUP E TRANSFERÊNCIA DE DADOS -->
+        <section id="view-backup" class="view-section">
+            <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 max-w-4xl mx-auto transition-colors">
+                <div class="flex items-center gap-3 border-b border-slate-200 dark:border-slate-700 pb-4 mb-6">
+                    <i class="fa-solid fa-database text-blue-600 text-3xl"></i>
+                    <div>
+                        <h2 class="text-2xl font-black text-slate-800 dark:text-white">Backup e Transferência de Dados</h2>
+                        <p class="text-slate-500 dark:text-slate-400 text-sm">Gerencie o banco de dados local (IndexedDB) e transfira arquivos JSON entre dispositivos.</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <!-- Exportação -->
+                    <div class="bg-blue-50 dark:bg-slate-900 p-6 rounded-xl border border-blue-100 dark:border-slate-700">
+                        <h3 class="text-lg font-black text-blue-900 dark:text-blue-300 mb-2 flex items-center gap-2"><i class="fa-solid fa-file-export"></i> 1. Exportar Dados</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Gera um arquivo JSON completo com todo o histórico e caixas em andamento para ser enviado por WhatsApp, E-mail, etc.</p>
+                        <button onclick="exportJSONData()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-sm transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-download"></i> Baixar Arquivo JSON
+                        </button>
+                    </div>
+
+                    <!-- Importação -->
+                    <div class="bg-emerald-50 dark:bg-slate-900 p-6 rounded-xl border border-emerald-100 dark:border-slate-700">
+                        <h3 class="text-lg font-black text-emerald-900 dark:text-emerald-300 mb-2 flex items-center gap-2"><i class="fa-solid fa-file-import"></i> 2. Importar Dados</h3>
+                        <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Selecione um arquivo JSON gerado por este aplicativo. O sistema analisará o arquivo antes de importar.</p>
+                        <label class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-4 rounded-lg shadow-sm transition flex items-center justify-center gap-2 cursor-pointer">
+                            <i class="fa-solid fa-upload"></i> Selecionar JSON
+                            <input type="file" id="importFileInput" accept=".json" class="hidden" onchange="handleFileSelect(event)">
+                        </label>
+                    </div>
+                </div>
+
+                <div class="border-t border-slate-200 dark:border-slate-700 pt-6 mt-6">
+                    <h3 class="text-lg font-black text-slate-800 dark:text-white mb-4">Opções Avançadas e Segurança</h3>
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <button onclick="openRestoreModal()" class="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold py-3 px-4 rounded-lg transition flex items-center justify-center gap-2 text-sm">
+                            <i class="fa-solid fa-clock-rotate-left"></i> Restaurar Backup Automático
+                        </button>
+                        <button onclick="clearAllDataConfirm()" class="flex-1 bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-800/60 text-red-700 dark:text-red-400 font-bold py-3 px-4 rounded-lg transition flex items-center justify-center gap-2 text-sm">
+                            <i class="fa-solid fa-trash-can"></i> Limpar Todo o Banco de Dados
+                        </button>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-3">* O sistema cria backups automáticos invisíveis sempre que você atualiza ou substitui dados durante uma importação.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL CUSTOMIZADO GERAL -->
+    <div id="custom-modal" class="modal-overlay fixed inset-0 z-50 items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700 transform transition-all">
+            <div class="flex items-center gap-3 mb-4">
+                <div id="modal-icon" class="text-3xl"></div>
+                <h3 id="modal-title" class="text-xl font-black text-slate-800 dark:text-white">Título</h3>
+            </div>
+            <p id="modal-msg" class="text-slate-600 dark:text-slate-300 mb-5 text-sm sm:text-base leading-relaxed"></p>
+            <div id="modal-duplicates" class="max-h-36 overflow-y-auto mb-5 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/50 p-3 rounded-lg border border-red-200 dark:border-red-900 hidden font-mono"></div>
+            
+            <div id="modal-buttons" class="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+                <button onclick="closeModal()" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 font-bold py-2 px-6 rounded-lg transition">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE DETALHES/EDIÇÃO DA CAIXA -->
+    <div id="box-details-modal" class="modal-overlay fixed inset-0 z-[60] items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-0 border border-slate-200 dark:border-slate-700 flex flex-col max-h-[90vh]">
+            <div class="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/80 rounded-t-2xl">
+                <div>
+                    <h3 id="box-detail-title" class="text-xl font-black text-slate-800 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-box-open text-blue-600"></i> CAIXA 00
+                    </h3>
+                    <span id="box-detail-mode" class="text-xs font-bold text-slate-500 uppercase">Modo</span>
+                </div>
+                <button onclick="closeBoxDetails()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="p-5 overflow-y-auto flex-grow">
+                <div class="flex justify-between items-center bg-blue-50 dark:bg-slate-900 p-3 rounded-lg border border-blue-100 dark:border-slate-700 mb-4">
+                    <div>
+                        <span class="block text-xs font-bold text-slate-500">Quantidade</span>
+                        <span class="font-black text-blue-900 dark:text-blue-400">10 Hidrômetros</span>
+                    </div>
+                    <div class="text-right">
+                        <span class="block text-xs font-bold text-slate-500">Intervalo (Aprox.)</span>
+                        <span id="box-detail-range" class="font-mono text-sm font-bold text-slate-700 dark:text-slate-300">A100 - A109</span>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <h4 class="text-xs font-black uppercase text-slate-500 mb-2 border-b border-slate-200 dark:border-slate-700 pb-1">Lista de Seriais</h4>
+                    <div id="box-detail-list" class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm font-mono text-slate-700 dark:text-slate-300 max-h-48 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <!-- Seriais -->
+                    </div>
+                </div>
+
+                <!-- ÁREA DE EDIÇÃO -->
+                <div id="box-edit-area" class="hidden bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-xl border border-yellow-200 dark:border-yellow-700/50 mt-4">
+                    <h4 class="text-sm font-black text-yellow-800 dark:text-yellow-400 mb-2">Editar Seriais da Caixa</h4>
+                    
+                    <div id="edit-sequential-container" class="hidden">
+                        <p class="text-xs text-yellow-700 dark:text-yellow-500 mb-3">Corrija o <strong>primeiro número</strong>. Os 9 seguintes serão recalculados. O prefixo salvo não será modificado.</p>
+                        <input type="text" id="editBoxInitialSerial" class="w-full p-3 border border-yellow-300 dark:border-yellow-700/50 rounded-lg bg-white dark:bg-slate-900 font-mono font-bold uppercase focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                    </div>
+
+                    <div id="edit-manual-container" class="hidden">
+                        <p class="text-xs text-yellow-700 dark:text-yellow-500 mb-3">Edite os números individualmente. O prefixo comum da caixa será adicionado se você preencher apenas os números.</p>
+                        <div class="grid grid-cols-2 gap-2" id="edit-manual-inputs-grid">
+                            <!-- Injetado via JS -->
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 mt-4">
+                        <button onclick="saveBoxEdit()" class="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 rounded-lg transition text-sm">Salvar Correções</button>
+                        <button onclick="toggleEditArea(false)" class="flex-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold py-2 rounded-lg transition text-sm">Cancelar</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex flex-wrap gap-2 justify-end bg-slate-50 dark:bg-slate-800/80 rounded-b-2xl">
+                <button id="btn-show-edit" class="bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/50 dark:hover:bg-blue-800/80 text-blue-700 dark:text-blue-300 font-bold py-2 px-4 rounded-lg transition text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square"></i> Editar Caixa
+                </button>
+                <button id="btn-delete-box" class="bg-red-100 hover:bg-red-200 dark:bg-red-900/50 dark:hover:bg-red-800/80 text-red-700 dark:text-red-300 font-bold py-2 px-4 rounded-lg transition text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-trash"></i> Excluir Caixa
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE RESUMO DE IMPORTAÇÃO (ATUALIZAR VS SUBSTITUIR) -->
+    <div id="import-modal" class="modal-overlay fixed inset-0 z-50 items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-200 dark:border-slate-700 transform transition-all">
+            <h3 class="text-2xl font-black text-emerald-700 dark:text-emerald-400 mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-file-circle-check"></i> Arquivo Reconhecido
+            </h3>
+            
+            <div class="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700 mb-6">
+                <p class="text-sm font-bold text-slate-600 dark:text-slate-400 mb-2 uppercase">Resumo dos Dados no Arquivo:</p>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div><strong class="text-slate-800 dark:text-slate-200">Exportado em:</strong> <br><span id="import-date" class="font-mono text-slate-600 dark:text-slate-400"></span></div>
+                    <div><strong class="text-slate-800 dark:text-slate-200">Versão JSON:</strong> <br><span id="import-version" class="font-mono text-slate-600 dark:text-slate-400"></span></div>
+                    <div><strong class="text-slate-800 dark:text-slate-200">Total de Paletes (Histórico):</strong> <br><span id="import-pallets-count" class="font-black text-blue-600"></span></div>
+                    <div><strong class="text-slate-800 dark:text-slate-200">Rascunho em aberto:</strong> <br><span id="import-draft-status" class="font-black text-emerald-600"></span></div>
+                </div>
+            </div>
+
+            <p class="text-sm text-slate-600 dark:text-slate-300 font-medium mb-4 text-center">Como você deseja importar estes dados?</p>
+
+            <div class="space-y-3">
+                <button onclick="executeImport('update')" class="w-full text-left bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-800/50 p-4 rounded-xl border border-blue-200 dark:border-blue-700 transition">
+                    <span class="block font-black text-blue-800 dark:text-blue-300 text-lg mb-1"><i class="fa-solid fa-code-merge"></i> Atualizar Dados</span>
+                    <span class="block text-xs text-blue-600 dark:text-blue-400">Novos registros serão adicionados. Paletes já existentes serão atualizados. Nenhum dado local seu que não esteja no arquivo será perdido.</span>
+                </button>
+
+                <button onclick="executeImport('replace')" class="w-full text-left bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-800/50 p-4 rounded-xl border border-red-200 dark:border-red-700 transition">
+                    <span class="block font-black text-red-800 dark:text-red-300 text-lg mb-1"><i class="fa-solid fa-triangle-exclamation"></i> Substituir Dados</span>
+                    <span class="block text-xs text-red-600 dark:text-red-400">ATENÇÃO: Apaga todos os seus dados atuais locais e substitui fielmente pelo conteúdo exato do arquivo importado.</span>
+                </button>
+            </div>
+
+            <div class="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 text-center">
+                <button onclick="closeImportModal()" class="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 font-bold underline text-sm transition">Cancelar Importação</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PARA RESTAURAR BACKUPS AUTO -->
+    <div id="restore-modal" class="modal-overlay fixed inset-0 z-[65] items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-200 dark:border-slate-700 transform transition-all flex flex-col max-h-[90vh]">
+            <h3 class="text-xl font-black text-slate-800 dark:text-white mb-2 flex items-center gap-2">
+                <i class="fa-solid fa-clock-rotate-left text-blue-600"></i> Restauração Automática
+            </h3>
+            <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">Escolha um ponto de restauração gerado automaticamente pelo sistema.</p>
+            
+            <div class="flex-grow overflow-y-auto mb-4 bg-slate-50 dark:bg-slate-900 rounded-xl p-2 border border-slate-200 dark:border-slate-700">
+                <ul id="backup-list" class="space-y-2">
+                    <!-- Li listada via JS -->
+                </ul>
+            </div>
+            
+            <div class="flex justify-end pt-4 border-t border-slate-100 dark:border-slate-700">
+                <button onclick="closeRestoreModal()" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 font-bold py-2 px-6 rounded-lg transition text-sm">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const LocalDB = {
+            dbName: 'HidrometrosDB',
+            version: 1,
+            db: null,
+            init: async function() {
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open(this.dbName, this.version);
+                    
+                    req.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        // Cria stores se não existirem (com keyPath para usar put direto pelo objeto)
+                        if (!db.objectStoreNames.contains('pallets')) db.createObjectStore('pallets', { keyPath: 'id' });
+                        if (!db.objectStoreNames.contains('config')) db.createObjectStore('config', { keyPath: 'id' }); 
+                        if (!db.objectStoreNames.contains('backups')) db.createObjectStore('backups', { keyPath: 'timestamp' });
+                    };
+                    
+                    req.onsuccess = (e) => { this.db = e.target.result; resolve(); };
+                    req.onerror = (e) => reject('Erro ao iniciar DB');
+                });
+            },
+            put: async function(store, data) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(store, 'readwrite');
+                    tx.objectStore(store).put(data);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject();
+                });
+            },
+            getAll: async function(store) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(store, 'readonly');
+                    const req = tx.objectStore(store).getAll();
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject();
+                });
+            },
+            clear: async function(store) {
+                return new Promise((resolve, reject) => {
+                    const tx = this.db.transaction(store, 'readwrite');
+                    tx.objectStore(store).clear();
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject();
+                });
+            }
+        };
+
+        let appHistory = [];
+        let appPreferences = { employee: '', brand: '', sigla: '' };
+        let activePalletSession = {
+            id: Date.now().toString(),
+            employee: '',
+            brand: '',
+            sigla: '',
+            lot: '',
+            palletNumber: '',
+            initialBox: '', 
+            prefix: '',
+            boxes: [], 
+            date: '',
+            time: ''
+        };
+        let currentViewingBoxId = null;
+        let pendingImportData = null; // Guarda json até confirmação (update vs replace)
+
+        window.onload = async () => {
+            initTheme();
+            
+            // Inicia o IndexedDB e Aguarda
+            await LocalDB.init();
+            
+            // Migrar os dados antigos do LocalStorage se existirem
+            await migrateOldData();
+            
+            // Carregar tudo do IndexedDB para as variáveis de memória (Renderização super rápida)
+            await loadAllFromDB();
+            
+            generateManualInputs(); 
+            updatePalletHeaderDisplay();
+            updateDashboard();
+            navigate('session');
+        };
+
+        async function migrateOldData() {
+            try {
+                let hasOldData = false;
+                const h = localStorage.getItem('hidrometros_history');
+                if (h) {
+                    const arr = JSON.parse(h);
+                    for (let p of arr) await LocalDB.put('pallets', p);
+                    localStorage.removeItem('hidrometros_history');
+                    hasOldData = true;
+                }
+                const d = localStorage.getItem('hidrometros_draft_session');
+                if (d) {
+                    await LocalDB.put('config', { id: 'draft', data: JSON.parse(d) });
+                    localStorage.removeItem('hidrometros_draft_session');
+                    hasOldData = true;
+                }
+                const p = localStorage.getItem('hidrometros_prefs');
+                if (p) {
+                    await LocalDB.put('config', { id: 'prefs', data: JSON.parse(p) });
+                    localStorage.removeItem('hidrometros_prefs');
+                    hasOldData = true;
+                }
+                if (hasOldData) console.log("Migração do LocalStorage para IndexedDB concluída com sucesso.");
+            } catch(e) {
+                console.error("Erro na migração", e);
+            }
+        }
+
+        async function loadAllFromDB() {
+            // Histórico
+            const pallets = await LocalDB.getAll('pallets');
+            // Ordenar descrescente pelo ID (que é timestamp gerado no Date.now())
+            appHistory = pallets.sort((a, b) => Number(b.id) - Number(a.id));
+
+            // Configs (Draft e Prefs)
+            const configs = await LocalDB.getAll('config');
+            
+            const prefsConf = configs.find(c => c.id === 'prefs');
+            if (prefsConf && prefsConf.data) appPreferences = prefsConf.data;
+            
+            const draftConf = configs.find(c => c.id === 'draft');
+            if (draftConf && draftConf.data) {
+                activePalletSession = draftConf.data;
+            } else {
+                // Caso não tenha draft salvo, prepopula os dados de preferencias num novo
+                activePalletSession.employee = appPreferences.employee;
+                activePalletSession.brand = appPreferences.brand;
+                activePalletSession.sigla = appPreferences.sigla;
+            }
+        }
+
+        function actionVoltar() {
+            const isSessionActive = document.getElementById('view-session').classList.contains('active');
+            if (!isSessionActive) {
+                navigate('session');
+            } else {
+                if (document.referrer) window.location.href = document.referrer;
+                else window.history.back();
+            }
+        }
+
+        function initTheme() {
+            const savedTheme = localStorage.getItem('hidrometros_theme');
+            if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+                document.getElementById('theme-icon').className = 'fa-solid fa-sun text-yellow-400 text-lg';
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.getElementById('theme-icon').className = 'fa-solid fa-moon text-amber-300 text-lg';
+            }
+        }
+
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('hidrometros_theme', isDark ? 'dark' : 'light');
+            initTheme();
+        }
+
+        function navigate(viewId) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+            document.getElementById(`view-${viewId}`).classList.add('active');
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-800', 'dark:bg-slate-700');
+            });
+            document.getElementById(`nav-btn-${viewId}`).classList.add('bg-blue-800', 'dark:bg-slate-700');
+            window.scrollTo(0, 0);
+
+            if (viewId === 'history') renderHistoryList();
+            if (viewId === 'dashboard') updateDashboard();
+        }
+
+        function toggleGenerationMode() {
+            const mode = document.querySelector('input[name="genMode"]:checked').value;
+            const seqCont = document.getElementById('mode-sequential-container');
+            const manCont = document.getElementById('mode-manual-container');
+            
+            if (mode === 'sequential') {
+                seqCont.classList.remove('hidden');
+                manCont.classList.add('hidden');
+            } else {
+                seqCont.classList.add('hidden');
+                manCont.classList.remove('hidden');
+            }
+        }
+
+        function generateManualInputs() {
+            const grid = document.getElementById('manual-inputs-grid');
+            grid.innerHTML = '';
+            for (let i = 1; i <= 10; i++) {
+                grid.innerHTML += `
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">Hidrômetro ${formatTwoDigits(i)}</label>
+                        <input type="text" id="manInput_${i}" class="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm font-mono font-bold uppercase focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    </div>
+                `;
+            }
+        }
+
+        function showModal(title, msg, type = 'info', extraData = null) {
+            const modal = document.getElementById('custom-modal');
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-msg').innerText = msg;
+            
+            const iconEl = document.getElementById('modal-icon');
+            if (type === 'error') iconEl.innerHTML = '<i class="fa-solid fa-circle-exclamation text-red-500"></i>';
+            else if (type === 'success') iconEl.innerHTML = '<i class="fa-solid fa-circle-check text-green-500"></i>';
+            else iconEl.innerHTML = '<i class="fa-solid fa-circle-info text-blue-500"></i>';
+
+            const dupBox = document.getElementById('modal-duplicates');
+            if (extraData && extraData.length > 0) {
+                dupBox.innerHTML = extraData.join('<br>');
+                dupBox.classList.remove('hidden');
+            } else {
+                dupBox.classList.add('hidden');
+            }
+            modal.classList.add('active');
+        }
+
+        function closeModal() { document.getElementById('custom-modal').classList.remove('active'); }
+
+        function showConfirmModal(title, msg, onConfirm) {
+            showModal(title, msg, 'error');
+            const btns = document.getElementById('modal-buttons');
+            btns.innerHTML = `
+                <button onclick="closeModal()" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 font-bold py-2 px-6 rounded-lg transition text-sm">Cancelar</button>
+                <button id="btn-confirm-action" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg transition text-sm">Confirmar</button>
+            `;
+            document.getElementById('btn-confirm-action').onclick = () => {
+                onConfirm(); closeModal(); setTimeout(() => resetModalButtons(), 300);
+            };
+        }
+        function resetModalButtons() { document.getElementById('modal-buttons').innerHTML = '<button onclick="closeModal()" class="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 font-bold py-2 px-6 rounded-lg transition text-sm">OK</button>'; }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast-message');
+            toast.className = "mt-4 p-4 rounded-xl text-sm font-bold bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300 border border-green-300 dark:border-green-800 flex items-center justify-between shadow-md";
+            toast.innerHTML = `<span><i class="fa-solid fa-circle-check mr-2"></i> ${msg}</span>`;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 5000);
+        }
+
+        function formatTwoDigits(num) { return String(num).padStart(2, '0'); }
+
+        async function autoFillSigla() {
+            const brand = document.getElementById('brand').value.trim();
+            const siglaField = document.getElementById('sigla');
+            if (brand.toUpperCase() === 'SAGA') siglaField.value = 'SG';
+            else if (brand.length >= 2 && !siglaField.value) siglaField.value = brand.substring(0, 2).toUpperCase();
+            await applyPalletHeader();
+        }
+
+        function getPalletCode(sigla, lot, palletNum) {
+            const l = lot ? formatTwoDigits(parseInt(lot)) : '';
+            const p = palletNum || '';
+            const sig = (sigla || '').toUpperCase();
+            if(!l && !p && !sig) return 'PLT - /';
+            return `PLT - ${sig}${l}/${p}`;
+        }
+
+        async function applyPalletHeader() {
+            activePalletSession.employee = document.getElementById('empName').value.trim();
+            activePalletSession.brand = document.getElementById('brand').value.trim();
+            activePalletSession.sigla = document.getElementById('sigla').value.trim().toUpperCase();
+            
+            const lotVal = document.getElementById('lot').value;
+            activePalletSession.lot = lotVal ? formatTwoDigits(parseInt(lotVal)) : '';
+            activePalletSession.palletNumber = document.getElementById('palletNum').value;
+            activePalletSession.initialBox = document.getElementById('initialBox').value;
+            activePalletSession.prefix = document.getElementById('prefix').value.trim().toUpperCase();
+            
+            await savePreferences();
+            await saveDraftSession();
+            updatePalletHeaderDisplay();
+        }
+
+        async function savePreferences() {
+            appPreferences = { employee: activePalletSession.employee, brand: activePalletSession.brand, sigla: activePalletSession.sigla };
+            await LocalDB.put('config', { id: 'prefs', data: appPreferences });
+        }
+        async function saveDraftSession() {
+            await LocalDB.put('config', { id: 'draft', data: activePalletSession });
+        }
+
+        function updatePalletHeaderDisplay() {
+            document.getElementById('empName').value = activePalletSession.employee;
+            document.getElementById('brand').value = activePalletSession.brand;
+            document.getElementById('sigla').value = activePalletSession.sigla;
+            document.getElementById('lot').value = activePalletSession.lot ? parseInt(activePalletSession.lot) : '';
+            document.getElementById('palletNum').value = activePalletSession.palletNumber;
+            document.getElementById('initialBox').value = activePalletSession.initialBox;
+            document.getElementById('prefix').value = activePalletSession.prefix;
+
+            const code = getPalletCode(activePalletSession.sigla, activePalletSession.lot, activePalletSession.palletNumber);
+            document.getElementById('display-pallet-code').innerText = code;
+
+            const boxCount = activePalletSession.boxes.length;
+            let startBox = parseInt(activePalletSession.initialBox);
+            if (isNaN(startBox) || startBox < 1) startBox = 1;
+            
+            let nextNum = startBox;
+            if (boxCount > 0) nextNum = Math.max(...activePalletSession.boxes.map(b => b.boxIndex)) + 1;
+            
+            const badge = document.getElementById('box-label-badge');
+            const progress = document.getElementById('box-progress-info');
+            const btnSeq = document.getElementById('btn-generate-seq');
+            const btnMan = document.getElementById('btn-generate-man');
+
+            progress.innerText = `${boxCount} de 50 caixas`;
+
+            if (boxCount >= 50) {
+                badge.innerHTML = '<i class="fa-solid fa-ban"></i> PALETE CHEIO (50/50)';
+                badge.className = "bg-red-600 text-white font-black px-4 py-1.5 rounded-lg text-sm shadow-md flex items-center gap-2";
+                btnSeq.disabled = true; btnSeq.classList.add('opacity-50', 'cursor-not-allowed');
+                btnMan.disabled = true; btnMan.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                badge.innerHTML = `<i class="fa-solid fa-box"></i> CAIXA ${formatTwoDigits(nextNum)}`;
+                badge.className = "bg-blue-600 text-white font-black px-4 py-1.5 rounded-lg text-sm shadow-md flex items-center gap-2";
+                btnSeq.disabled = false; btnSeq.classList.remove('opacity-50', 'cursor-not-allowed');
+                btnMan.disabled = false; btnMan.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+            updateDashboard();
+        }
+
+        async function validateCommonSetup() {
+            await applyPalletHeader(); 
+            if(!activePalletSession.employee || !activePalletSession.brand || !activePalletSession.lot || !activePalletSession.palletNumber) {
+                showModal('Atenção', 'Preencha os dados do palete (Funcionário, Marca, Lote e Palete Nº) antes de gerar caixas.', 'error');
+                return false;
+            }
+            if (activePalletSession.boxes.length >= 50) {
+                showModal('Limite Atingido', 'Este palete já possui 50 caixas.', 'error');
+                return false;
+            }
+            return true;
+        }
+
+        function buildSerialString(prefix, inputVal) {
+            const val = inputVal.trim().toUpperCase();
+            if (!val) return "";
+            if (prefix && val.startsWith(prefix)) return val;
+            return prefix + val;
+        }
+
+        function checkDuplicates(serialsArray, excludeBoxIndex = null) {
+            const existingSerials = new Set();
+            appHistory.forEach(p => p.boxes.forEach(b => b.serials.forEach(s => existingSerials.add(s.serial))));
+            activePalletSession.boxes.forEach(b => {
+                if (excludeBoxIndex === null || b.boxIndex !== excludeBoxIndex) b.serials.forEach(s => existingSerials.add(s.serial));
+            });
+            const duplicates = [];
+            serialsArray.forEach(s => {
+                if (existingSerials.has(s.serial)) duplicates.push(s.serial);
+            });
+            return duplicates;
+        }
+
+        function calculateNextBoxIndex() {
+            let startBox = parseInt(activePalletSession.initialBox);
+            if (isNaN(startBox) || startBox < 1) startBox = 1;
+            if (activePalletSession.boxes.length > 0) return Math.max(...activePalletSession.boxes.map(b => b.boxIndex)) + 1;
+            return startBox;
+        }
+
+        async function generateSequentialBox() {
+            if (!(await validateCommonSetup())) return;
+
+            const rawInput = document.getElementById('seqInput').value.trim().toUpperCase();
+            if (!rawInput) {
+                showModal('Atenção', 'Digite o primeiro número da caixa.', 'error'); return;
+            }
+
+            const prefix = activePalletSession.prefix;
+            let numStr = rawInput;
+            if (prefix && rawInput.startsWith(prefix)) numStr = rawInput.substring(prefix.length);
+
+            const startNum = parseInt(numStr, 10);
+            if (isNaN(startNum)) {
+                showModal('Inválido', 'O número base deve ser numérico.', 'error'); return;
+            }
+
+            const generated = [];
+            for (let i = 0; i < 10; i++) {
+                generated.push({ index: i + 1, serial: prefix + (startNum + i) });
+            }
+
+            const duplicates = checkDuplicates(generated);
+            if (duplicates.length > 0) {
+                showModal('Duplicidade Encontrada', 'Estes seriais já estão cadastrados em outra caixa/palete:', 'error', duplicates);
+                return;
+            }
+
+            const boxIndex = calculateNextBoxIndex();
+            activePalletSession.boxes.push({
+                boxIndex: boxIndex,
+                boxNumStr: formatTwoDigits(boxIndex),
+                mode: 'sequential',
+                initialSerial: generated[0].serial,
+                finalSerial: generated[9].serial,
+                serials: generated
+            });
+
+            await saveDraftSession();
+            document.getElementById('seqInput').value = '';
+            document.getElementById('seqInput').focus();
+            showToast(`Caixa Sequencial ${formatTwoDigits(boxIndex)} salva com sucesso!`);
+            updatePalletHeaderDisplay();
+        }
+
+        async function generateManualBox() {
+            if (!(await validateCommonSetup())) return;
+
+            const prefix = activePalletSession.prefix;
+            const generated = [];
+            
+            for (let i = 1; i <= 10; i++) {
+                const inputVal = document.getElementById(`manInput_${i}`).value;
+                if (!inputVal.trim()) {
+                    showModal('Atenção', `O hidrômetro ${i} está vazio. Preencha todos os 10 no modo manual.`, 'error');
+                    return;
+                }
+                generated.push({ index: i, serial: buildSerialString(prefix, inputVal) });
+            }
+
+            const duplicates = checkDuplicates(generated);
+            if (duplicates.length > 0) {
+                showModal('Duplicidade Encontrada', 'Estes seriais já estão cadastrados em outra caixa/palete:', 'error', duplicates);
+                return;
+            }
+
+            const boxIndex = calculateNextBoxIndex();
+            activePalletSession.boxes.push({
+                boxIndex: boxIndex,
+                boxNumStr: formatTwoDigits(boxIndex),
+                mode: 'manual',
+                initialSerial: generated[0].serial,
+                finalSerial: generated[9].serial,
+                serials: generated
+            });
+
+            await saveDraftSession();
+            for (let i = 1; i <= 10; i++) document.getElementById(`manInput_${i}`).value = '';
+            showToast(`Caixa Manual ${formatTwoDigits(boxIndex)} salva com sucesso!`);
+            updatePalletHeaderDisplay();
+        }
+
+        function updateDashboard() {
+            const palletCode = getPalletCode(activePalletSession.sigla, activePalletSession.lot, activePalletSession.palletNumber);
+            document.getElementById('dash-pallet').innerText = palletCode;
+            
+            const boxCount = activePalletSession.boxes.length;
+            document.getElementById('dash-boxes').innerText = `${boxCount} / 50`;
+            document.getElementById('dash-meters').innerText = `${boxCount * 10} / 500`;
+
+            let lastSerial = '-';
+            if (boxCount > 0) {
+                const sorted = [...activePalletSession.boxes].sort((a,b)=> a.boxIndex - b.boxIndex);
+                lastSerial = sorted[sorted.length-1].finalSerial;
+            }
+            document.getElementById('dash-last-serial').innerText = lastSerial;
+
+            const percent = Math.round((boxCount / 50) * 100);
+            document.getElementById('dash-progress-text').innerText = `${percent}% Concluído`;
+            document.getElementById('dash-progress-bar').style.width = `${percent}%`;
+            
+            if(percent === 100) document.getElementById('dash-progress-bar').className = "bg-green-500 h-4 rounded-full transition-all duration-500";
+            else document.getElementById('dash-progress-bar').className = "bg-blue-600 h-4 rounded-full transition-all duration-500";
+
+            renderBoxGrid();
+        }
+
+        function renderBoxGrid() {
+            const grid = document.getElementById('dash-boxes-grid');
+            grid.innerHTML = '';
+            
+            let startBox = parseInt(activePalletSession.initialBox);
+            if (isNaN(startBox) || startBox < 1) startBox = 1;
+
+            const existingIndexes = activePalletSession.boxes.map(b => b.boxIndex);
+            
+            for (let i = 0; i < 50; i++) {
+                const boxIndex = startBox + i;
+                const exists = existingIndexes.includes(boxIndex);
+                const btn = document.createElement('button');
+                
+                btn.className = `box-grid-btn p-2 sm:p-3 rounded-lg border-2 flex flex-col items-center justify-center gap-1 shadow-sm transition-all focus:outline-none ${exists ? 'bg-blue-50 border-blue-500 dark:bg-blue-900/30 dark:border-blue-500 cursor-pointer' : 'bg-slate-50 border-dashed border-slate-300 dark:bg-slate-800 dark:border-slate-600 opacity-60 cursor-default'}`;
+                
+                if (exists) {
+                    btn.onclick = () => openBoxDetails(boxIndex);
+                    btn.innerHTML = `
+                        <span class="text-xs sm:text-sm font-black text-blue-900 dark:text-blue-200">${formatTwoDigits(boxIndex)}</span>
+                        <i class="fa-solid fa-check-circle text-blue-500 dark:text-blue-400 text-sm sm:text-lg"></i>
+                    `;
+                } else {
+                    btn.innerHTML = `
+                        <span class="text-xs sm:text-sm font-bold text-slate-400 dark:text-slate-500">${formatTwoDigits(boxIndex)}</span>
+                        <i class="fa-regular fa-circle text-slate-300 dark:text-slate-600 text-sm sm:text-lg"></i>
+                    `;
+                }
+                grid.appendChild(btn);
+            }
+        }
+
+        function openBoxDetails(boxIndex) {
+            const box = activePalletSession.boxes.find(b => b.boxIndex === boxIndex);
+            if (!box) return;
+            
+            currentViewingBoxId = boxIndex;
+            document.getElementById('box-detail-title').innerHTML = `<i class="fa-solid fa-box-open text-blue-600"></i> CAIXA ${box.boxNumStr}`;
+            document.getElementById('box-detail-mode').innerText = `Modo: ${box.mode === 'manual' ? 'Manual' : 'Sequencial'}`;
+            document.getElementById('box-detail-mode').className = `text-xs font-black uppercase px-2 py-0.5 rounded ${box.mode === 'manual' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}`;
+            document.getElementById('box-detail-range').innerText = `${box.initialSerial} ... ${box.finalSerial}`;
+            
+            const listContainer = document.getElementById('box-detail-list');
+            listContainer.innerHTML = box.serials.map(s => `<div class="py-1 border-b border-slate-200 dark:border-slate-800 last:border-0">${s.serial}</div>`).join('');
+            
+            toggleEditArea(false);
+
+            document.getElementById('btn-show-edit').onclick = () => toggleEditArea(true, box);
+            document.getElementById('btn-delete-box').onclick = () => {
+                showConfirmModal('Excluir Caixa', `Tem certeza que deseja excluir a CAIXA ${box.boxNumStr}?`, async () => {
+                    activePalletSession.boxes = activePalletSession.boxes.filter(b => b.boxIndex !== boxIndex);
+                    await saveDraftSession();
+                    updatePalletHeaderDisplay();
+                    closeBoxDetails();
+                    showToast(`Caixa excluída.`);
+                });
+            };
+            document.getElementById('box-details-modal').classList.add('active');
+        }
+
+        function closeBoxDetails() {
+            document.getElementById('box-details-modal').classList.remove('active');
+            currentViewingBoxId = null;
+        }
+
+        function toggleEditArea(show, box = null) {
+            const area = document.getElementById('box-edit-area');
+            const seqCont = document.getElementById('edit-sequential-container');
+            const manCont = document.getElementById('edit-manual-container');
+            
+            if(!show) { area.classList.add('hidden'); return; }
+            area.classList.remove('hidden');
+            
+            if (box.mode === 'manual') {
+                seqCont.classList.add('hidden'); manCont.classList.remove('hidden');
+                const grid = document.getElementById('edit-manual-inputs-grid');
+                grid.innerHTML = '';
+                const prefix = activePalletSession.prefix;
+                box.serials.forEach((s, idx) => {
+                    let disp = s.serial;
+                    if(prefix && disp.startsWith(prefix)) disp = disp.substring(prefix.length);
+                    grid.innerHTML += `<input type="text" id="editManInput_${idx+1}" value="${disp}" class="w-full p-2 border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 font-mono text-sm uppercase">`;
+                });
+            } else {
+                seqCont.classList.remove('hidden'); manCont.classList.add('hidden');
+                let disp = box.initialSerial;
+                if(activePalletSession.prefix && disp.startsWith(activePalletSession.prefix)) disp = disp.substring(activePalletSession.prefix.length);
+                document.getElementById('editBoxInitialSerial').value = disp;
+                document.getElementById('editBoxInitialSerial').focus();
+            }
+        }
+
+        async function saveBoxEdit() {
+            if(!currentViewingBoxId) return;
+            const boxIndex = activePalletSession.boxes.findIndex(b => b.boxIndex === currentViewingBoxId);
+            if(boxIndex === -1) return;
+            const box = activePalletSession.boxes[boxIndex];
+            const prefix = activePalletSession.prefix;
+            let generated = [];
+
+            if (box.mode === 'sequential') {
+                const rawInput = document.getElementById('editBoxInitialSerial').value.trim().toUpperCase();
+                if(!rawInput) return;
+                let numStr = rawInput;
+                if (prefix && rawInput.startsWith(prefix)) numStr = rawInput.substring(prefix.length);
+                const startNum = parseInt(numStr, 10);
+                if (isNaN(startNum)) { showModal('Inválido', 'O número base deve ser numérico.', 'error'); return; }
+                for (let i = 0; i < 10; i++) generated.push({ index: i + 1, serial: prefix + (startNum + i) });
+            } else {
+                for (let i = 1; i <= 10; i++) {
+                    const inputVal = document.getElementById(`editManInput_${i}`).value;
+                    if (!inputVal.trim()) { showModal('Atenção', 'Nenhum campo pode ficar vazio.', 'error'); return; }
+                    generated.push({ index: i, serial: buildSerialString(prefix, inputVal) });
+                }
+            }
+
+            const duplicates = checkDuplicates(generated, box.boxIndex);
+            if (duplicates.length > 0) {
+                showModal('Atenção: Duplicidade', 'Estes seriais já estão em uso:', 'error', duplicates); return;
+            }
+
+            activePalletSession.boxes[boxIndex].initialSerial = generated[0].serial;
+            activePalletSession.boxes[boxIndex].finalSerial = generated[9].serial;
+            activePalletSession.boxes[boxIndex].serials = generated;
+            
+            await saveDraftSession();
+            updatePalletHeaderDisplay(); 
+            openBoxDetails(currentViewingBoxId); 
+            showToast('Caixa atualizada com sucesso!');
+        }
+
+        function resetPalletConfigConfirm() {
+            if(activePalletSession.boxes.length > 0) showConfirmModal('Iniciar Novo Palete', 'Você tem caixas não salvas. Iniciar um novo apagará as atuais. Deseja continuar?', createNewPallet);
+            else createNewPallet();
+        }
+
+        async function createNewPallet() {
+            activePalletSession = {
+                id: Date.now().toString(),
+                employee: appPreferences.employee || document.getElementById('empName').value.trim(),
+                brand: appPreferences.brand || document.getElementById('brand').value.trim(),
+                sigla: appPreferences.sigla || document.getElementById('sigla').value.trim().toUpperCase(),
+                lot: '',
+                palletNumber: '',
+                initialBox: '',
+                prefix: document.getElementById('prefix').value.trim().toUpperCase(),
+                boxes: [], date: '', time: ''
+            };
+            await saveDraftSession();
+            updatePalletHeaderDisplay();
+            navigate('session');
+        }
+
+        async function savePalletSession() {
+            if (activePalletSession.boxes.length === 0) {
+                showModal('Vazio', 'Gere pelo menos 1 caixa antes de concluir o palete.', 'error'); return;
+            }
+
+            const now = new Date();
+            activePalletSession.date = now.toLocaleDateString('pt-BR');
+            activePalletSession.time = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            activePalletSession.boxes.sort((a, b) => a.boxIndex - b.boxIndex);
+
+            const savedPallet = JSON.parse(JSON.stringify(activePalletSession));
+            
+            appHistory.unshift(savedPallet);
+            await LocalDB.put('pallets', savedPallet); // Salva no banco offline
+            
+            showModal('Palete Concluído!', `O palete foi salvo no histórico com ${savedPallet.boxes.length} caixas.`, 'success');
+            await createNewPallet();
+        }
+
+        function buildCleanExportText(session) {
+            if (!session || session.boxes.length === 0) return "";
+            let text = "";
+            session.boxes.forEach(bx => { bx.serials.forEach(s => { text += `${s.serial}\n`; }); });
+            text += `\n--------------------------------------------------\n\nINFORMAÇÕES DA OPERAÇÃO\n\n`;
+            text += `Digitado por: ${session.employee}\nData: ${session.date || new Date().toLocaleDateString('pt-BR')}\nHora: ${session.time || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}\n\n`;
+            text += `Marca: ${session.brand}\nLote: ${session.lot}\n\n`;
+            const pCode = getPalletCode(session.sigla, session.lot, session.palletNumber);
+            text += `Palete: ${pCode}\n\n`;
+            const boxIndexes = session.boxes.map(b => b.boxIndex);
+            const firstB = formatTwoDigits(Math.min(...boxIndexes));
+            const lastB = formatTwoDigits(Math.max(...boxIndexes));
+            text += `Caixas: ${firstB} a ${lastB}\nQuantidade de caixas: ${session.boxes.length}\nQuantidade de hidrômetros: ${session.boxes.length * 10}\n`;
+            return text;
+        }
+
+        function copyCleanSerials() {
+            const text = buildCleanExportText(activePalletSession);
+            if (!text) { showModal('Atenção', 'Nenhuma caixa para copiar.', 'info'); return; }
+            try {
+                let ta = document.createElement("textarea");
+                ta.value = text; ta.style.position = "fixed"; ta.style.left = "-999999px"; ta.style.top = "-999999px";
+                document.body.appendChild(ta); ta.focus(); ta.select();
+                let successful = document.execCommand('copy');
+                ta.remove();
+                if (successful) showToast('Lista copiada!');
+                else showModal('Erro', 'Seu navegador bloqueou a cópia. Tente PDF ou Excel.', 'error');
+            } catch (err) { showModal('Erro', 'Não foi possível copiar.', 'error'); }
+        }
+
+        function shareWhatsAppClean() {
+            const text = buildCleanExportText(activePalletSession);
+            if (!text) return;
+            const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+            window.open(url, '_blank');
+        }
+
+        function generateCleanPDFCurrent() {
+            if (activePalletSession.boxes.length === 0) return;
+            const { jsPDF } = window.jspdf; const doc = new jsPDF(); let y = 15;
+            const tableData = [];
+            activePalletSession.boxes.forEach(bx => { bx.serials.forEach(s => tableData.push([s.serial])); });
+            doc.autoTable({
+                startY: y, head: [['SERIAL']], body: tableData, theme: 'plain', tableWidth: 'wrap',
+                headStyles: { fillColor: [240, 240, 240], textColor: [0,0,0], fontStyle: 'bold', halign: 'left' },
+                styles: { font: 'courier', fontSize: 11, cellPadding: 2, textColor: [0,0,0], overflow: 'linebreak' },
+                margin: { top: 20, right: 14, bottom: 20, left: 14 }
+            });
+            let finalY = doc.lastAutoTable.finalY + 15;
+            if (finalY > 240) { doc.addPage(); finalY = 20; }
+            doc.setDrawColor(200); doc.line(14, finalY - 5, 196, finalY - 5);
+            doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.text("INFORMAÇÕES DA OPERAÇÃO", 14, finalY);
+            doc.setFontSize(10); finalY += 8;
+            const addLine = (label, value, x1=14, x2=55) => { doc.setFont("helvetica", "bold"); doc.text(label, x1, finalY); doc.setFont("helvetica", "normal"); doc.text(value, x2, finalY); };
+            const pCode = getPalletCode(activePalletSession.sigla, activePalletSession.lot, activePalletSession.palletNumber);
+            const bIndex = activePalletSession.boxes.map(b=>b.boxIndex);
+            const cxs = `${formatTwoDigits(Math.min(...bIndex))} a ${formatTwoDigits(Math.max(...bIndex))}`;
+            addLine("Digitado por:", activePalletSession.employee); finalY += 6;
+            addLine("Data:", activePalletSession.date || new Date().toLocaleDateString('pt-BR')); finalY += 6;
+            addLine("Hora:", activePalletSession.time || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })); finalY += 8;
+            addLine("Marca:", activePalletSession.brand); finalY += 6;
+            addLine("Lote:", String(activePalletSession.lot)); finalY += 8;
+            addLine("Palete:", pCode); finalY += 6;
+            addLine("Caixas:", cxs); finalY += 6;
+            addLine("Qtd. Caixas:", String(activePalletSession.boxes.length)); finalY += 6;
+            addLine("Qtd. Hidrômetros:", String(activePalletSession.boxes.length * 10));
+            doc.save(`Seriais_${pCode.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`);
+        }
+
+        function exportExcelCurrent() {
+            if (activePalletSession.boxes.length === 0) return;
+            const ws_data = []; ws_data.push(["SERIAL"]);
+            activePalletSession.boxes.forEach(bx => { bx.serials.forEach(s => { ws_data.push([s.serial]); }); });
+            ws_data.push([]); ws_data.push([]);
+            const pCode = getPalletCode(activePalletSession.sigla, activePalletSession.lot, activePalletSession.palletNumber);
+            const bIndex = activePalletSession.boxes.map(b=>b.boxIndex);
+            const cxs = `${formatTwoDigits(Math.min(...bIndex))} a ${formatTwoDigits(Math.max(...bIndex))}`;
+            ws_data.push(["INFORMAÇÕES DA OPERAÇÃO"]);
+            ws_data.push(["Digitado por:", activePalletSession.employee]);
+            ws_data.push(["Data:", activePalletSession.date || new Date().toLocaleDateString('pt-BR')]);
+            ws_data.push(["Hora:", activePalletSession.time || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })]);
+            ws_data.push([]); ws_data.push(["Marca:", activePalletSession.brand]); ws_data.push(["Lote:", activePalletSession.lot]); ws_data.push([]);
+            ws_data.push(["Palete:", pCode]); ws_data.push(["Caixas:", cxs]); ws_data.push(["Quantidade:", activePalletSession.boxes.length * 10]);
+            const ws = XLSX.utils.aoa_to_sheet(ws_data); ws['!cols'] = [{ wch: 25 }, { wch: 25 }];
+            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Seriais");
+            XLSX.writeFile(wb, `Seriais_${pCode.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`);
+        }
+
+        function renderHistoryList(filterText = '') {
+            const tbody = document.getElementById('history-tbody');
+            tbody.innerHTML = '';
+
+            let list = appHistory;
+            if (filterText) {
+                const f = filterText.toLowerCase();
+                list = list.filter(h => 
+                    (getPalletCode(h.sigla,h.lot,h.palletNumber).toLowerCase().includes(f)) ||
+                    (h.employee && h.employee.toLowerCase().includes(f)) ||
+                    h.boxes.some(b => b.serials.some(s => s.serial.toLowerCase().includes(f)))
+                );
+            }
+
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Nenhum registro encontrado.</td></tr>`;
+                return;
+            }
+
+            list.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50";
+                const bCount = item.boxes.length;
+                const pCode = getPalletCode(item.sigla, item.lot, item.palletNumber);
+                
+                tr.innerHTML = `
+                    <td class="px-4 py-3 whitespace-nowrap"><span class="block font-bold text-slate-800 dark:text-slate-200">${item.date || '-'}</span><span class="text-xs text-slate-500">${item.time || ''}</span></td>
+                    <td class="px-4 py-3 font-black text-blue-700 dark:text-blue-400">${pCode}</td>
+                    <td class="px-4 py-3"><span class="px-2 py-1 rounded text-xs font-bold ${bCount===50?'bg-green-100 text-green-800':'bg-yellow-100 text-yellow-800'}">${bCount} cx (${bCount*10} un)</span></td>
+                    <td class="px-4 py-3 text-slate-600 dark:text-slate-300 font-medium">${item.employee}</td>
+                    <td class="px-4 py-3 text-center"><button onclick="viewHistoryItem('${item.id}')" class="text-xs font-bold bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-2 rounded-lg transition mr-1">Abrir</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function searchHistory() {
+            const input = document.getElementById('searchInput').value.trim();
+            const resDiv = document.getElementById('searchResult');
+            if (!input) { resDiv.classList.add('hidden'); renderHistoryList(); return; }
+
+            let foundS = null, foundB = null, foundP = null;
+            for (let pal of appHistory) {
+                for (let box of pal.boxes) {
+                    let s = box.serials.find(x => x.serial.toUpperCase() === input.toUpperCase());
+                    if (s) { foundS = s; foundB = box; foundP = pal; break; }
+                }
+                if (foundS) break;
+            }
+
+            if (foundS) {
+                resDiv.innerHTML = `<div class="bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-200 border border-green-300 dark:border-green-800 p-4 rounded-lg"><h4 class="font-black border-b border-green-200 dark:border-green-800 pb-2 mb-2 flex items-center gap-2"><i class="fa-solid fa-check"></i> Serial Localizado!</h4><div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm font-medium"><p><strong>Serial:</strong> <span class="font-mono font-bold">${foundS.serial}</span></p><p><strong>Palete:</strong> ${getPalletCode(foundP.sigla, foundP.lot, foundP.palletNumber)}</p><p><strong>Caixa:</strong> ${foundB.boxNumStr}</p><p><strong>Data:</strong> ${foundP.date} às ${foundP.time}</p></div></div>`;
+                resDiv.classList.remove('hidden');
+            } else { resDiv.classList.add('hidden'); }
+            renderHistoryList(input);
+        }
+
+        async function viewHistoryItem(id) {
+            const item = appHistory.find(h => h.id === id);
+            if (item) {
+                activePalletSession = JSON.parse(JSON.stringify(item));
+                await saveDraftSession();
+                updatePalletHeaderDisplay();
+                navigate('dashboard');
+                showToast('Palete carregado no Dashboard para edição/exportação.');
+            }
+        }
+
+        async function exportJSONData() {
+            const pallets = await LocalDB.getAll('pallets');
+            const configs = await LocalDB.getAll('config');
+            const draft = configs.find(c => c.id === 'draft')?.data || null;
+            const prefs = configs.find(c => c.id === 'prefs')?.data || null;
+
+            const exportObj = {
+                app: "GeradorHidrometros",
+                version: 1,
+                date: new Date().toISOString(),
+                data: { pallets, draft, prefs }
+            };
+
+            const dataStr = JSON.stringify(exportObj, null, 2);
+            const blob = new Blob([dataStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url;
+            a.download = `backup_hidrometros_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            showToast('Arquivo JSON gerado e baixado com sucesso!');
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (imported.app !== "GeradorHidrometros" || !imported.data) {
+                        showModal('Erro', 'Arquivo inválido ou corrompido. Certifique-se de que é um JSON deste aplicativo.', 'error');
+                        return;
+                    }
+                    pendingImportData = imported.data;
+                    
+                    // Mostra o Modal de Resumo
+                    document.getElementById('import-date').innerText = new Date(imported.date).toLocaleString('pt-BR');
+                    document.getElementById('import-version').innerText = imported.version;
+                    document.getElementById('import-pallets-count').innerText = (imported.data.pallets || []).length;
+                    document.getElementById('import-draft-status').innerText = (imported.data.draft && imported.data.draft.boxes.length > 0) ? `Sim (${imported.data.draft.boxes.length} caixas)` : "Nenhum / Vazio";
+                    
+                    document.getElementById('import-modal').classList.add('active');
+
+                } catch (err) { showModal('Erro', 'Falha ao ler o arquivo JSON.', 'error'); }
+                event.target.value = ''; // Limpa input
+            };
+            reader.readAsText(file);
+        }
+
+        function closeImportModal() {
+            document.getElementById('import-modal').classList.remove('active');
+            pendingImportData = null;
+        }
+
+        async function createAutoBackup() {
+            const pallets = await LocalDB.getAll('pallets');
+            const configs = await LocalDB.getAll('config');
+            const backupData = {
+                timestamp: Date.now(),
+                dateStr: new Date().toLocaleString('pt-BR'),
+                data: { 
+                    pallets, 
+                    draft: configs.find(c => c.id === 'draft')?.data || null, 
+                    prefs: configs.find(c => c.id === 'prefs')?.data || null 
+                }
+            };
+            await LocalDB.put('backups', backupData);
+        }
+
+        async function executeImport(mode) {
+            if (!pendingImportData) return;
+            closeImportModal();
+
+            // 1. Snapshot automático antes da operação
+            await createAutoBackup();
+
+            // 2. Apagar DB atual se for Substituição (Replace)
+            if (mode === 'replace') {
+                await LocalDB.clear('pallets');
+                await LocalDB.clear('config');
+                appHistory = [];
+            }
+
+            const { pallets, draft, prefs } = pendingImportData;
+
+            // 3. Processar Pallets
+            if (pallets && Array.isArray(pallets)) {
+                for (let p of pallets) {
+                    await LocalDB.put('pallets', p); // DB IndexedDB mergea pela KeyPath 'id'
+                    const idx = appHistory.findIndex(existing => existing.id === p.id);
+                    if (idx >= 0) appHistory[idx] = p; // Atualiza em memória
+                    else appHistory.push(p); // Adiciona em memória se novo
+                }
+            }
+            appHistory.sort((a, b) => Number(b.id) - Number(a.id));
+
+            // 4. Processar Draft (Sempre sobrescreve o atual se o arquivo trouxer um, ou zera em caso de replace)
+            if (draft) {
+                activePalletSession = draft;
+                await LocalDB.put('config', { id: 'draft', data: draft });
+            } else if (mode === 'replace') {
+                await createNewPallet(); 
+            }
+
+            // 5. Processar Preferências
+            if (prefs) {
+                appPreferences = prefs;
+                await LocalDB.put('config', { id: 'prefs', data: prefs });
+            }
+
+            // Atualiza UI
+            updatePalletHeaderDisplay();
+            updateDashboard();
+            renderHistoryList();
+            showModal('Concluído', `Importação finalizada com sucesso! Modo utilizado: ${mode === 'update' ? 'Atualização' : 'Substituição Completa'}.`, 'success');
+            pendingImportData = null;
+        }
+
+        async function openRestoreModal() {
+            const backups = await LocalDB.getAll('backups');
+            const list = document.getElementById('backup-list');
+            
+            if (backups.length === 0) {
+                list.innerHTML = `<li class="p-4 text-center text-slate-500 font-bold">Nenhum backup automático disponível. Eles são criados automaticamente quando você realiza uma importação.</li>`;
+            } else {
+                backups.sort((a, b) => b.timestamp - a.timestamp); // Mais recente no topo
+                list.innerHTML = backups.map(b => `
+                    <li class="flex items-center justify-between p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
+                        <div>
+                            <span class="block font-black text-slate-800 dark:text-slate-200">Snapshot Segurança</span>
+                            <span class="text-xs text-slate-500 font-mono">${b.dateStr}</span>
+                        </div>
+                        <button onclick="executeRestore(${b.timestamp})" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition text-xs shadow-sm">Restaurar Este</button>
+                    </li>
+                `).join('');
+            }
+            document.getElementById('restore-modal').classList.add('active');
+        }
+
+        function closeRestoreModal() { document.getElementById('restore-modal').classList.remove('active'); }
+
+        function executeRestore(timestamp) {
+            closeRestoreModal();
+            showConfirmModal('Restaurar Backup', 'ATENÇÃO: Restaurar este ponto apagará os dados ATUAIS para substituí-los pela versão do momento do backup. Confirma?', async () => {
+                const backups = await LocalDB.getAll('backups');
+                const backup = backups.find(b => b.timestamp === timestamp);
+                if (backup && backup.data) {
+                    pendingImportData = backup.data; // Passamos para o pipeline normal de importação via replace
+                    
+                    // Bypass do modal visual e chama a lógica de replace direto
+                    await LocalDB.clear('pallets');
+                    await LocalDB.clear('config');
+                    appHistory = [];
+                    
+                    const { pallets, draft, prefs } = pendingImportData;
+                    if (pallets) {
+                        for (let p of pallets) { await LocalDB.put('pallets', p); appHistory.push(p); }
+                        appHistory.sort((a, b) => Number(b.id) - Number(a.id));
+                    }
+                    if (draft) { activePalletSession = draft; await LocalDB.put('config', { id: 'draft', data: draft }); }
+                    else { await createNewPallet(); }
+                    
+                    if (prefs) { appPreferences = prefs; await LocalDB.put('config', { id: 'prefs', data: prefs }); }
+
+                    updatePalletHeaderDisplay(); updateDashboard(); renderHistoryList();
+                    showToast('Banco de dados restaurado para o momento do backup.');
+                    pendingImportData = null;
+                }
+            });
+        }
+
+        function clearAllDataConfirm() {
+            showConfirmModal('Apagar Todos os Dados', 'Apagar todo o Banco de Dados (IndexedDB)? Esta ação destrói todo o histórico e caixas e não tem volta sem um backup manual prévio.', async () => {
+                appHistory = [];
+                await LocalDB.clear('pallets');
+                await LocalDB.clear('config');
+                await createNewPallet();
+                showModal('Feito', 'Todos os dados foram excluídos com segurança.', 'success');
+            });
+        }
+    </script>
+</body>
+</html>
